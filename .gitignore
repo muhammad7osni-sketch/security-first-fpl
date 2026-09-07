@@ -1,0 +1,60 @@
+# Dart/Flutter/Pub related
+**/doc/api/
+**/ios/Flutter/Flutter.podspec
+**/ios/Flutter/Flutter.framework
+**/ios/Flutter/Generated.xcconfig
+**/ios/Flutter/ephemeral/
+**/ios/Pods/
+**/ios/Runner.xcworkspace/xcshareddata/
+**/ios/Runner.xcworkspace/xcuserdata/
+**/ios/Runner.xcworkspace/
+**/ios/.symlinks/
+**/ios/**/*.mode1v3
+**/ios/**/*.mode2v3
+**/ios/**/*.moved-aside
+**/ios/**/*.pbxuser
+**/ios/**/*.perspectivev3
+**/ios/**/*.xcworkspace
+**/ios/**/*sync/
+**/ios/**/.sconsign.dblite
+**/ios/**/.tags*
+**/ios/**/.vscode/
+**/ios/**/.idea/
+**/ios/**/flutter/Flutter.framework
+**/ios/**/flutter/Flutter.podspec
+**/pubspec.lock
+**/windows/flutter/generated_plugins.cmake
+**/windows/flutter/generated_plugin_symlink_group
+
+# Environment
+.env.local
+.env.*.local
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+build/
+.pub-cache/
+.pub/
+
+# IDE
+.idea/
+.vscode/
+*.iml
+*.lock
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Supabase
+supabase/.env.local
+supabase/.env.*.local
+
+# Sensitive files
+*.key
+*.pem
+private_key.json
+
+# GitHub Actions
+.github/workflows/*.log
