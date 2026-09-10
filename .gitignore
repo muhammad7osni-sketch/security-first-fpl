@@ -58,3 +58,5 @@ private_key.json
 
 # GitHub Actions
 .github/workflows/*.log
+# Widget Preview related
+.widget_preview/

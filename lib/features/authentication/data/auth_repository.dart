@@ -59,23 +59,20 @@ class AuthRepository {
   Future<void> signOut() => _client.auth.signOut();
 
   /// Creates the corresponding `users` row on first sign-up. Idempotent:
-  /// relies on `auth_user_id` uniqueness, so a retried call is a no-op.
+  /// uses upsert on `auth_user_id` so a retried call is always a no-op
+  /// and there is no race condition between the SELECT and INSERT.
   Future<void> _ensureAppUserRow({
     required String authUserId,
     required String email,
   }) async {
-    final existing = await _client
-        .from('users')
-        .select()
-        .eq('auth_user_id', authUserId)
-        .maybeSingle();
-
-    if (existing != null) return;
-
-    await _client.from('users').insert({
-      'auth_user_id': authUserId,
-      'email': email,
-    });
+    await _client.from('users').upsert(
+      {
+        'auth_user_id': authUserId,
+        'email': email,
+      },
+      onConflict: 'auth_user_id',
+      ignoreDuplicates: true,
+    );
   }
 
   Future<Result<AppUser>> getCurrentAppUser() async {

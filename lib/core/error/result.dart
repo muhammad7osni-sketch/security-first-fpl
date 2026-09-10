@@ -45,6 +45,10 @@ enum AppFailureType {
   notFound,
   rateLimited,
   servedStaleCache,
+
+  /// Cloud Run URL not configured via --dart-define=CLOUD_RUN_URL.
+  /// UI interprets this as "show manual Team ID fallback form".
+  cloudRunNotConfigured,
   unknown,
 }
 
@@ -53,7 +57,8 @@ enum AppFailureType {
 extension ResultConvenience<T> on Result<T> {
   T? get valueOrNull => this is Ok<T> ? (this as Ok<T>).value : null;
 
-  AppFailure? get failureOrNull => this is Err<T> ? (this as Err<T>).failure : null;
+  AppFailure? get failureOrNull =>
+      this is Err<T> ? (this as Err<T>).failure : null;
 }
 
 class AppFailure {
