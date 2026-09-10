@@ -46,8 +46,10 @@ app.add_middleware(
     TrustedHostMiddleware,
     allowed_hosts=[
         "*.premierleague.com",
-        "localhost",
-        "127.0.0.1",
+    "*.onrender.com",
+    "localhost",
+    "127.0.0.1",
+
     ],
 )
 
