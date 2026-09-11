@@ -33,12 +33,13 @@ app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, create_rate_limit_error_handler())
 
 # CORS middleware
-# allow_origin_regex covers any localhost port (Flutter Web dev server uses
-# a random port each run) without opening the API to arbitrary origins.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.allowed_origins,
-    allow_origin_regex=r"http://localhost(:\d+)?",
+    allow_origins=[
+        "http://localhost:5000",
+        "http://localhost:3000",
+        "https://security-first-fpl-production.up.railway.app",
+    ] + settings.allowed_origins,
     allow_credentials=True,
     allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["Content-Type", "Authorization"],
