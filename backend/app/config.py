@@ -88,4 +88,4 @@ class Settings(BaseSettings):
 
 # Global settings instance
 settings = Settings()
-Fix CORS for Flutter web
+
