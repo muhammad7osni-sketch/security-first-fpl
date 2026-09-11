@@ -36,16 +36,16 @@ class Env {
 
   // ── FPL login service ────────────────────────────────────────────────
   //
-  // This function lives in the separate FPL-auth Supabase project:
-  // psgqhiqcxnupzbbunydx
+  // FastAPI backend running on Railway with outbound internet access.
   //
   // Flutter Web calls this endpoint directly over HTTPS.
-  // The Edge Function handles the server-side FPL login and returns the
+  // The backend handles the server-side FPL login and returns the
   // FPL team information.
 
   static const fplLoginUrl = String.fromEnvironment(
     'FPL_LOGIN_URL',
-    defaultValue: 'https://security-first-fpl.onrender.com/fpl/login',
+    defaultValue:
+        'https://security-first-fpl-production.up.railway.app/fpl/login',
   );
 
   // ── Configuration status ─────────────────────────────────────────────
