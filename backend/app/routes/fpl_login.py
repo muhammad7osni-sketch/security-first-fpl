@@ -10,11 +10,9 @@ Security contract (matches the Supabase Edge Function it replaces):
   - Rate-limited to 5 attempts per IP per hour.
 """
 
-from __future__ import annotations
-
 import re
 from datetime import datetime, timedelta, timezone
-from typing import Any
+from typing import Any, Dict, Optional
 
 import httpx
 from fastapi import APIRouter, HTTPException, Request, status
@@ -156,7 +154,7 @@ async def fpl_login(
                     "User-Agent": _HEADERS["User-Agent"],
                 },
             )
-            me_data: dict[str, Any] = me_resp.json()
+            me_data: Dict[str, Any] = me_resp.json()
         except Exception as exc:
             await _log_attempt(client_ip, success=False)
             logger.error("fpl_me_error: %s", exc)
@@ -205,7 +203,7 @@ def _get_client_ip(request: Request) -> str:
     return request.client.host if request.client else "unknown"
 
 
-def _extract_pl_profile(response: httpx.Response) -> str | None:
+def _extract_pl_profile(response: httpx.Response) -> Optional[str]:
     """Pull the pl_profile=... part from Set-Cookie headers."""
     for raw in response.headers.get_list("set-cookie"):
         for part in raw.split(";"):

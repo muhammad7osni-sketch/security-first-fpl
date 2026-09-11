@@ -19,6 +19,11 @@ dependencies:
 
   # Networking
   dio: ^5.4.3
+  http: ^1.2.2
+
+  # Utilities
+  crypto: ^3.0.5
+  url_launcher: ^6.3.1
 
   # Serialization
   freezed_annotation: ^2.4.1
@@ -50,14 +55,10 @@ dependencies:
   posthog_flutter: ^4.4.0
 
   cupertino_icons: ^1.0.8
+  google_fonts: ^6.2.1
 
   # Typography for the design system (see core/theme/) - Barlow Condensed
   # for scoreboard-style display numerals, Inter for body/data text.
-  google_fonts: ^6.2.1
-
-  # URL launching — deep links to official FPL website for safe write
-  # operations (section 0: read-only architecture, writes redirect to FPL)
-  url_launcher: ^6.3.0
 
 dev_dependencies:
   flutter_test:

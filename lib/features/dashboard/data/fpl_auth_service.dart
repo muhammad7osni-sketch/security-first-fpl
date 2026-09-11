@@ -1,44 +1,22 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:supabase_flutter/supabase_flutter.dart' as sb;
 
 import '../../../core/config/env.dart';
 import '../../../core/error/result.dart';
 
-/// Handles FPL account login and automatic team ID extraction.
+/// Authenticates against FPL and extracts the user's team ID.
 ///
-/// ## Platform routing
-///
-/// **Native (mobile/desktop):**
-/// POSTs directly to FPL's login endpoint, reads the `pl_profile` cookie,
-/// calls `/api/me/`, extracts the team ID, wipes the cookie immediately.
-/// The password never leaves the device after FPL confirms it.
-///
-/// **Web — Cloud Run path (when [Env.hasCloudRun] is true):**
-/// Browsers cannot POST cross-origin with cookies (CORS + SameSite).
-/// Supabase Edge Functions cannot reach FPL because Cloudflare datacenter
-/// IPs are blocked at DNS level by FPL. The request is therefore forwarded
-/// to a Google Cloud Run service which runs on Google IPs (not blocked).
-/// The Flutter app attaches the user's Supabase JWT so Cloud Run can
-/// verify identity before proxying to FPL. The password travels over
-/// HTTPS and is discarded server-side after a single FPL call.
-///
-/// **Web — Team ID fallback (when [Env.hasCloudRun] is false):**
-/// Cloud Run URL not configured → returns [AppFailureType.cloudRunNotConfigured]
-/// so [LinkFplAccountScreen] can display the manual Team ID form.
-/// This is the expected state in local development.
-///
-/// ## What is stored
-/// - FPL password: NEVER stored anywhere.
-/// - FPL session cookie: used once, then discarded. Briefly written to
-///   [FlutterSecureStorage] on native only as a safety net in case the
-///   app is killed mid-request; wiped unconditionally after `/me/`.
-/// - FPL team ID: only item persisted (public integer in Supabase).
+/// The FPL password is sent only over HTTPS and is never stored or logged.
+/// The FPL session cookie is used only during the native flow and is then
+/// deleted immediately.
 class FplAuthService {
-  // ── FPL endpoints ──────────────────────────────────────────────────
-  static const _fplLoginUrl = 'https://users.premierleague.com/accounts/login/';
-  static const _fplMeUrl = 'https://fantasy.premierleague.com/api/me/';
+  static const _fplLoginUrl =
+      'https://users.premierleague.com/accounts/login/';
+
+  static const _fplMeUrl =
+      'https://fantasy.premierleague.com/api/me/';
+
   static const _cookieKey = 'fpl_session_cookie';
 
   final FlutterSecureStorage _secureStorage;
@@ -46,134 +24,143 @@ class FplAuthService {
   FplAuthService({FlutterSecureStorage? secureStorage})
       : _secureStorage = secureStorage ?? const FlutterSecureStorage();
 
-  // ── Public API ──────────────────────────────────────────────────────
-
-  /// Returns the FPL team ID for the given credentials.
+  /// Returns the FPL team ID for the supplied credentials.
   ///
-  /// - On native: calls FPL directly.
-  /// - On web + Cloud Run configured: calls Cloud Run proxy.
-  /// - On web + Cloud Run NOT configured: returns
-  ///   [AppFailureType.cloudRunNotConfigured] so the caller can show
-  ///   the manual Team ID form instead.
+  /// Web:
+  ///   Calls the separate Supabase Edge Function.
+  ///
+  /// Native:
+  ///   Calls FPL directly and temporarily uses the session cookie.
   Future<Result<int>> fetchTeamId({
     required String email,
     required String password,
   }) async {
-    if (!kIsWeb) {
-      return _fetchTeamIdNative(email: email, password: password);
+    if (kIsWeb) {
+      return _fetchTeamIdViaFplLogin(
+        email: email,
+        password: password,
+      );
     }
 
-    if (!Env.hasCloudRun) {
-      // Signal to the UI that Cloud Run isn't set up yet.
-      // LinkFplAccountScreen uses this to show the Team ID fallback.
-      return Result.err(const AppFailure(
-        AppFailureType.cloudRunNotConfigured,
-        'Cloud Run not configured',
-      ));
-    }
-
-    return _fetchTeamIdViaCloudRun(email: email, password: password);
+    return _fetchTeamIdNative(
+      email: email,
+      password: password,
+    );
   }
 
-  // ── Web path: Google Cloud Run proxy ───────────────────────────────
+  // ── Web: Supabase Edge Function ─────────────────────────────────────
 
-  Future<Result<int>> _fetchTeamIdViaCloudRun({
+  Future<Result<int>> _fetchTeamIdViaFplLogin({
     required String email,
     required String password,
   }) async {
-    // Attach the user's Supabase JWT so Cloud Run can verify identity.
-    // The JWT is already in memory — we never ask the user for it.
-    final session = sb.Supabase.instance.client.auth.currentSession;
-    if (session == null) {
+    if (!Env.hasFplLogin) {
       return Result.err(const AppFailure(
-        AppFailureType.unknown,
-        'Not signed in. Please sign in to SquadIQ first.',
+        AppFailureType.cloudRunNotConfigured,
+        'FPL login service is not configured.',
       ));
     }
 
     try {
       final dio = Dio(BaseOptions(
         connectTimeout: const Duration(seconds: 15),
-        receiveTimeout: const Duration(seconds: 20),
-        headers: {
+        receiveTimeout: const Duration(seconds: 30),
+        headers: const {
           'Content-Type': 'application/json',
-          // JWT — verified server-side by Cloud Run via Supabase JWKS
-          'Authorization': 'Bearer ${session.accessToken}',
         },
       ));
 
       final response = await dio.post(
-        Env.cloudRunUrl,
-        data: {'email': email, 'password': password},
+        Env.fplLoginUrl,
+        data: {
+          'email': email.trim(),
+          'password': password,
+        },
       );
 
       final data = response.data;
-      if (data is! Map<String, dynamic>) {
+
+      if (data is! Map) {
         return Result.err(const AppFailure(
           AppFailureType.unexpectedResponseShape,
-          'Unexpected response from server. Please try again.',
+          'Unexpected response from FPL login service.',
         ));
       }
 
-      final raw = data['team_id'];
-      final teamId = raw is int ? raw : (raw is num ? raw.toInt() : null);
-      if (teamId == null) {
+      final rawTeamId = data['team_id'];
+      final teamId = rawTeamId is int
+          ? rawTeamId
+          : rawTeamId is num
+              ? rawTeamId.toInt()
+              : null;
+
+      if (teamId == null || teamId <= 0) {
         return Result.err(const AppFailure(
           AppFailureType.unexpectedResponseShape,
-          'Could not read team ID. Please try again.',
+          'Could not read your FPL team ID.',
         ));
       }
 
       return Result.ok(teamId);
     } on DioException catch (e) {
       final status = e.response?.statusCode;
-      final serverMsg = e.response?.data is Map
-          ? (e.response!.data as Map)['error'] as String?
+      final responseData = e.response?.data;
+
+      final serverMessage = responseData is Map
+          ? responseData['error']?.toString()
           : null;
 
       if (status == 401) {
         return Result.err(AppFailure(
           AppFailureType.unknown,
-          serverMsg ?? 'FPL login failed. Check your email and password.',
+          serverMessage ?? 'Incorrect FPL email or password.',
         ));
       }
+
       if (status == 404) {
         return Result.err(AppFailure(
           AppFailureType.notFound,
-          serverMsg ??
-              'No FPL team found. Create one at fantasy.premierleague.com.',
+          serverMessage ??
+              'No FPL team was found for this account.',
         ));
       }
+
       if (status == 429) {
         return Result.err(AppFailure(
           AppFailureType.rateLimited,
-          serverMsg ?? 'Too many attempts. Please wait 1 hour and try again.',
+          serverMessage ??
+              'Too many login attempts. Please try again later.',
         ));
       }
+
       return Result.err(AppFailure(
         AppFailureType.network,
-        serverMsg ?? 'Network error. Check your connection and try again.',
+        serverMessage ??
+            'Could not connect to the FPL login service.',
         cause: e,
       ));
     } catch (e) {
-      return Result.err(AppFailure(AppFailureType.unknown, e.toString()));
+      return Result.err(AppFailure(
+        AppFailureType.unknown,
+        'FPL login failed. Please try again.',
+        cause: e,
+      ));
     }
   }
 
-  // ── Native path: direct to FPL ─────────────────────────────────────
+  // ── Native: direct FPL login ────────────────────────────────────────
 
   Future<Result<int>> _fetchTeamIdNative({
     required String email,
     required String password,
   }) async {
     try {
-      // Step 1: POST credentials to FPL, capture session cookie
       final loginDio = Dio(BaseOptions(
         followRedirects: false,
         validateStatus: (status) => status != null && status < 400,
         connectTimeout: const Duration(seconds: 15),
         receiveTimeout: const Duration(seconds: 20),
-        headers: {
+        headers: const {
           'Content-Type': 'application/x-www-form-urlencoded',
           'Referer': 'https://fantasy.premierleague.com/',
           'Origin': 'https://fantasy.premierleague.com',
@@ -183,86 +170,105 @@ class FplAuthService {
       final loginResponse = await loginDio.post(
         _fplLoginUrl,
         data: {
-          'login': email,
+          'login': email.trim(),
           'password': password,
           'app': 'plfpl-web',
           'redirect_uri': 'https://fantasy.premierleague.com/',
         },
-        options: Options(contentType: 'application/x-www-form-urlencoded'),
+        options: Options(
+          contentType: 'application/x-www-form-urlencoded',
+        ),
       );
 
       final rawCookies =
           loginResponse.headers['set-cookie'] ?? const <String>[];
+
       final plProfile = _extractPlProfileCookie(rawCookies);
 
       if (plProfile == null) {
         return Result.err(const AppFailure(
           AppFailureType.unknown,
-          'FPL login failed. Check your email and password.',
+          'Incorrect FPL email or password.',
         ));
       }
 
-      // Store temporarily — wiped unconditionally after /me/ call
-      await _secureStorage.write(key: _cookieKey, value: plProfile);
+      await _secureStorage.write(
+        key: _cookieKey,
+        value: plProfile,
+      );
 
-      // Step 2: Call /me/ to get the team ID
-      final meDio = Dio(BaseOptions(
-        connectTimeout: const Duration(seconds: 15),
-        receiveTimeout: const Duration(seconds: 20),
-        headers: {
-          'Cookie': plProfile,
-          'Referer': 'https://fantasy.premierleague.com/',
-        },
-      ));
-
-      final meResponse = await meDio.get(_fplMeUrl);
-      final meData = meResponse.data;
-
-      // Step 3: Wipe cookie — never persisted beyond this point
-      await _secureStorage.delete(key: _cookieKey);
-
-      if (meData is! Map<String, dynamic>) {
-        return Result.err(const AppFailure(
-          AppFailureType.unexpectedResponseShape,
-          'Unexpected response from FPL. Please try again.',
+      try {
+        final meDio = Dio(BaseOptions(
+          connectTimeout: const Duration(seconds: 15),
+          receiveTimeout: const Duration(seconds: 20),
+          headers: {
+            'Cookie': plProfile,
+            'Referer': 'https://fantasy.premierleague.com/',
+          },
         ));
-      }
 
-      final entry = meData['entry'] as Map<String, dynamic>?;
-      if (entry == null) {
-        return Result.err(const AppFailure(
-          AppFailureType.notFound,
-          'No FPL team found for this account.\n'
-          'Create a team at fantasy.premierleague.com first.',
-        ));
-      }
+        final meResponse = await meDio.get(_fplMeUrl);
+        final meData = meResponse.data;
 
-      final teamId = entry['id'] as int?;
-      if (teamId == null) {
-        return Result.err(const AppFailure(
-          AppFailureType.unexpectedResponseShape,
-          'Could not read team ID from FPL. Please try again.',
-        ));
-      }
+        if (meData is! Map) {
+          return Result.err(const AppFailure(
+            AppFailureType.unexpectedResponseShape,
+            'Unexpected response from FPL.',
+          ));
+        }
 
-      return Result.ok(teamId);
+        final entry = meData['entry'];
+
+        if (entry is! Map) {
+          return Result.err(const AppFailure(
+            AppFailureType.notFound,
+            'No FPL team was found for this account.',
+          ));
+        }
+
+        final rawTeamId = entry['id'];
+        final teamId = rawTeamId is int
+            ? rawTeamId
+            : rawTeamId is num
+                ? rawTeamId.toInt()
+                : null;
+
+        if (teamId == null || teamId <= 0) {
+          return Result.err(const AppFailure(
+            AppFailureType.unexpectedResponseShape,
+            'Could not read your FPL team ID.',
+          ));
+        }
+
+        return Result.ok(teamId);
+      } finally {
+        await _secureStorage.delete(key: _cookieKey);
+      }
     } on DioException catch (e) {
       await _secureStorage.delete(key: _cookieKey);
+
       final status = e.response?.statusCode;
+
       if (status == 401 || status == 403) {
         return Result.err(const AppFailure(
           AppFailureType.unknown,
-          'Incorrect email or password. Please try again.',
+          'Incorrect FPL email or password.',
         ));
       }
+
       return Result.err(AppFailure(
         AppFailureType.network,
-        'Network error — check your connection and try again.',
+        'Could not connect to FPL.',
         cause: e,
       ));
     } catch (e) {
       await _secureStorage.delete(key: _cookieKey);
-      return Result.err(AppFailure(AppFailureType.unknown, e.toString()));
+
+      return Result.err(AppFailure(
+        AppFailureType.unknown,
+        'FPL login failed. Please try again.',
+        cause: e,
+      ));
     }
   }
 
@@ -272,9 +278,13 @@ class FplAuthService {
     for (final raw in rawCookies) {
       for (final part in raw.split(';')) {
         final trimmed = part.trim();
-        if (trimmed.startsWith('pl_profile=')) return trimmed;
+
+        if (trimmed.startsWith('pl_profile=')) {
+          return trimmed;
+        }
       }
     }
+
     return null;
   }
 }

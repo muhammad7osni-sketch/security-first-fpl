@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/status_colors.dart';
-import '../../../core/utils/fpl_launcher.dart';
 import '../../../core/widgets/stat_number.dart';
 import '../../../core/widgets/status_accent_card.dart';
 import '../../../data_providers/models/fixture.dart';
@@ -43,11 +42,7 @@ class DashboardScreen extends ConsumerWidget {
         title: const Text('SquadIQ'),
         actions: [
           // Quick link to open FPL My Team page
-          IconButton(
-            icon: const Icon(Icons.open_in_new),
-            tooltip: 'Open in FPL',
-            onPressed: () => FplLauncher.openMyTeam(),
-          ),
+          
           IconButton(
             icon: const Icon(Icons.event_note_outlined),
             tooltip: 'Fixtures',
@@ -451,14 +446,7 @@ class _SquadFixtureTicker extends StatelessWidget {
                   child: Text('Next fixture',
                       style: Theme.of(context).textTheme.titleMedium),
                 ),
-                TextButton.icon(
-                  onPressed: () => FplLauncher.openMyTeam(),
-                  icon: const Icon(Icons.edit_outlined, size: 16),
-                  label: const Text('Edit on FPL'),
-                  style: TextButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
-                  ),
-                ),
+                const SizedBox.shrink(),
               ],
             ),
             const SizedBox(height: 8),

@@ -54,7 +54,7 @@ class Settings(BaseSettings):
     # Security: CORS (configurable via ALLOWED_ORIGINS env var)
     allowed_origins_str: str = os.getenv(
         "ALLOWED_ORIGINS",
-        "https://fantasy.premierleague.com,http://localhost:3000"
+        "https://fantasy.premierleague.com,http://localhost:3000,http://localhost:56301"
     )
     allowed_origins: list = [url.strip() for url in allowed_origins_str.split(",")]
 
