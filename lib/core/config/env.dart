@@ -1,51 +1,57 @@
 /// Compile-time environment values, injected via `--dart-define` at build
-/// time. Per plan section 17: secrets never live inside the Flutter
-/// codebase or get committed — these two are the Supabase *anon* key
-/// (safe for client exposure by design, protected by RLS) and project
-/// URL, not the service-role key. The service-role key belongs only in
-/// the Compute Service backend, never here.
+/// time.
 ///
-/// The anon key + URL below are intentionally public — they are the
-/// standard Supabase client-side identifiers, protected by Row Level
-/// Security (RLS), not by secrecy. They are equivalent to a public
-/// API key and are safe to ship in client apps.
+/// Public client-side values:
+/// - SUPABASE_URL
+/// - SUPABASE_ANON_KEY
 ///
-/// [cloudRunUrl] points to the Google Cloud Run FPL login service.
-/// It is empty by default (falls back to manual Team ID entry on web)
-/// and must be set at build time for the automated web login path to
-/// be active. The value is the Cloud Run service URL returned by
-/// `gcloud run deploy`, e.g.:
-///   --dart-define=CLOUD_RUN_URL=https://fpl-login-xxxx-ew.a.run.app
+/// These are the Supabase project URL and publishable/anon key used by
+/// Flutter. They are protected by Supabase RLS and are safe to expose in
+/// the client application.
 ///
-/// Keeping it empty in development is intentional — the Team ID
-/// fallback works without any server setup.
+/// The FPL login service is a separate Supabase Edge Function hosted in
+/// the FPL authentication project. It receives the FPL credentials over
+/// HTTPS, authenticates against FPL, and returns the team information.
+///
+/// IMPORTANT:
+/// - Never put SUPABASE_SERVICE_ROLE_KEY here.
+/// - Never put an FPL password in this file.
+/// - Never put any backend secret in Flutter code.
+library;
+
 class Env {
   Env._();
 
+  // ── SquadIQ Supabase staging project ─────────────────────────────────
+
   static const supabaseUrl = String.fromEnvironment(
     'SUPABASE_URL',
-    defaultValue: 'https://psgqhiqcxnupzbbunydx.supabase.co',
+    defaultValue: 'https://wlhjcgvxlyvlhiecdbkh.supabase.co',
   );
 
   static const supabaseAnonKey = String.fromEnvironment(
     'SUPABASE_ANON_KEY',
-    defaultValue:
-        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBzZ3FoaXFjeG51cHpiYnVueWR4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg0OTA3NjUsImV4cCI6MjEwNDA2Njc2NX0.DFjI1ou3kJgbgGB5gZmq4lrgyE_46XsfR8wUcuYZxKQ',
+    defaultValue: 'sb_publishable_OnySMS35xhG0IuqVtFL7Xg_SCNFaRwc',
   );
 
-  /// Google Cloud Run FPL login service URL.
-  /// Empty = Cloud Run not configured → web falls back to manual Team ID.
-  /// Set via: --dart-define=CLOUD_RUN_URL=https://fpl-login-xxxx-ew.a.run.app
-  static const cloudRunUrl = String.fromEnvironment(
-    'CLOUD_RUN_URL',
-    defaultValue: '',
+  // ── FPL login service ────────────────────────────────────────────────
+  //
+  // This function lives in the separate FPL-auth Supabase project:
+  // psgqhiqcxnupzbbunydx
+  //
+  // Flutter Web calls this endpoint directly over HTTPS.
+  // The Edge Function handles the server-side FPL login and returns the
+  // FPL team information.
+
+  static const fplLoginUrl = String.fromEnvironment(
+    'FPL_LOGIN_URL',
+    defaultValue: 'https://security-first-fpl.onrender.com/fpl/login',
   );
+
+  // ── Configuration status ─────────────────────────────────────────────
 
   static bool get isConfigured =>
       supabaseUrl.isNotEmpty && supabaseAnonKey.isNotEmpty;
 
-  /// True when the Cloud Run FPL login service URL has been provided.
-  /// Controls whether web uses automated email+password login or falls
-  /// back to manual Team ID entry.
-  static bool get hasCloudRun => cloudRunUrl.isNotEmpty;
+  static bool get hasFplLogin => fplLoginUrl.isNotEmpty;
 }

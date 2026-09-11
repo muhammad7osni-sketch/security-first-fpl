@@ -6,7 +6,7 @@ import 'core/config/env.dart';
 import 'core/theme/app_theme.dart';
 import 'core/utils/app_lifecycle_observer.dart';
 import 'features/authentication/presentation/auth_providers.dart';
-import 'features/authentication/presentation/sign_in_screen.dart';
+import 'features/authentication/presentation/pick_team_screen.dart';
 import 'features/dashboard/presentation/dashboard_controller.dart';
 import 'features/dashboard/presentation/dashboard_screen.dart';
 
